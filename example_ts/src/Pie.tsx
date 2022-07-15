@@ -51,15 +51,41 @@ const Pie = ({
 
   const getRadius = () => widthAndHeight / 2;
 
+  const pointFromAngle = (distance: number, angle: number) => {
+    return {
+      x: distance * Math.cos((angle * Math.PI) / 180),
+      y: distance * Math.sin((angle * Math.PI) / 180),
+    };
+  };
+
+  const checkOverlapping = (p1: Point, p2: Point, w: number, h: number) => {
+    //Checking overlapings on point top-left
+    let overlapX = p1.x >= p2.x && p1.x <= p2.x + w && Math.abs(p1.y - p2.y) <= h;
+    let overlapY = p1.y >= p2.y - h && p1.y <= p2.y && Math.abs(p1.x - p2.x) <= w;
+
+    //Checking overlapings on point bottom-right
+    if (!overlapX) {
+      const _p1x = p1.x + w;
+      overlapX = _p1x >= p2.x && _p1x <= p2.x + w && Math.abs(p1.y - p2.y) <= h;
+    }
+    //Checking overlapings on point bottom-right
+    if (!overlapY) {
+      const _p1y = p1.y - h;
+      overlapY = _p1y >= p2.y - h && _p1y <= p2.y && Math.abs(p1.x - p2.x) <= w;
+    }
+    return overlapX || overlapY;
+  };
+
   const radius = getRadius();
   const rotation = Platform.OS == 'ios' ? 90 : 0;
-  const totalSerie = series.reduce((acc, val) => acc + val);
+  const totalSeries = series.reduce((acc, val) => acc + val);
+  //The pie graph is draw in reverse order (clockwise), so we need to revert the angles in order
+  //to place the labels in the correct postion
   const reverseAngle = angle.map((a) => a * -1);
-  const textDistance = widthAndHeight / 3; //widthAndHeight / 4 + widthAndHeight / 12.5;
-  let textPositions: Array<Point> = [];
+  const labelDistance = radius / 1.5;
+  const labelPosition: Array<Point> = [];
   const labelHight = widthAndHeight / 14;
   const labelWidth = labelHight * 2.5;
-  console.log('Label', labelWidth, labelHight);
 
   return (
     <View style={{ width: widthAndHeight, height: widthAndHeight }}>
@@ -67,7 +93,7 @@ const Pie = ({
       <Surface style={style} width={widthAndHeight} height={widthAndHeight}>
         {/* @ts-expect-error 'rotation' is not defined in the types, but actually exists */}
         <Group rotation={rotation} originX={radius} originY={radius}>
-          {series.flatMap((serie, index) => {
+          {series.flatMap((_, index) => {
             if (angle[index] != angle[index + 1]) {
               return [
                 <Wedge
@@ -95,98 +121,52 @@ const Pie = ({
         >
           {series.map((serie, index) => {
             const middleAngleValue = reverseAngle[index] + (reverseAngle[index + 1] - reverseAngle[index]) / 2;
-            // console.log(
-            //   'Index: ',
-            //   index,
-            //   'Angle: ',
-            //   reverseAngle[index],
-            //   reverseAngle[index + 1],
-            //   'Middle: ',
-            //   middleAngleValue
-            // );
-            let x1 = textDistance * Math.cos((middleAngleValue * Math.PI) / 180);
-            let y1 = textDistance * Math.sin((middleAngleValue * Math.PI) / 180);
-            index == 1 && console.log('line 109', x1, textDistance, Math.cos((middleAngleValue * Math.PI) / 180));
-            // y1 += y1 < 0 ? widthAndHeight / 12.5 : widthAndHeight / 25;
-            if (middleAngleValue < -200 && middleAngleValue > -340) y1 -= labelHight / 2;
-            else y1 += labelHight / 2;
+            const currentPoint = pointFromAngle(labelDistance, middleAngleValue);
 
-            //Only for 3rd and 4th cuadrant
+            //Moving Y axis because the pivot is in the top-left corner
+            if (middleAngleValue < -200 && middleAngleValue > -340) currentPoint.y -= labelHight / 2;
+            else currentPoint.y += labelHight / 2;
+
+            //Only for 3rd and 4th cuadrant, Moving X axis because the pivot is in the top-left corner
             if (middleAngleValue <= -270 || middleAngleValue >= -100) {
-              if (Math.abs(reverseAngle[index + 1] - reverseAngle[index]) > 25) x1 -= labelWidth / 2;
-              else x1 -= labelWidth / 4;
+              if (Math.abs(reverseAngle[index + 1] - reverseAngle[index]) > 25) currentPoint.x -= labelWidth / 2;
+              else currentPoint.x -= labelWidth / 4;
             }
-            // console.log(index, textPositions);
 
-            // to avoid text overlapping
-            // const displacementY = labelHight;
-            // const displacementX = labelWidth;
+            //To check Overlappings labels
+            labelPosition.forEach((prevPoint) => {
+              const overlapping = checkOverlapping(currentPoint, prevPoint, labelWidth, labelHight);
 
-            textPositions.forEach((p) => {
-              //Checking overlapings on point top-left
-              let overlapX = x1 >= p.x && x1 <= p.x + labelWidth && Math.abs(y1 - p.y) <= labelHight;
-              let overlapY = y1 >= p.y - labelHight && y1 <= p.y && Math.abs(x1 - p.x) <= labelWidth;
+              if (overlapping) {
+                ({ x: currentPoint.x } = pointFromAngle(labelDistance + labelWidth, middleAngleValue));
+                ({ y: currentPoint.y } = pointFromAngle(labelDistance + labelHight, middleAngleValue));
+                //Only for 1st & 2nd cuadrant
+                if (middleAngleValue < -270 || middleAngleValue > -100) currentPoint.x -= labelWidth / 2;
+                //Only for +- 3rd & 4th cuadrant
+                if (middleAngleValue <= -210 && middleAngleValue >= -330) currentPoint.y -= labelHight / 2;
+                else currentPoint.y += labelHight / 2;
 
-              //Checking overlapings on point bottom-right
-              if (!overlapX) {
-                const _x1 = x1 + labelWidth;
-                overlapX = _x1 >= p.x && _x1 <= p.x + labelWidth && Math.abs(y1 - p.y) <= labelHight;
-              }
-
-              if (!overlapY) {
-                const _y1 = y1 - labelHight;
-                overlapY = _y1 >= p.y - labelHight && _y1 <= p.y && Math.abs(x1 - p.x) <= labelWidth;
-              }
-
-              index == 3 && console.log('=====', y1, p.y, Math.abs(y1 - p.y));
-              index == 3 && console.log(index, overlapX, overlapY);
-
-              if (overlapX) {
-                const displacementX = p.y + labelHight - y1;
-                // console.log('displacementX', displacementX);
-                x1 = (textDistance + labelWidth) * Math.cos((middleAngleValue * Math.PI) / 180);
-                //Only for 3rd and 4th cuadrant
-                if (middleAngleValue < -270 || middleAngleValue > -100) x1 -= labelWidth / 2;
-                index == 3 && console.log('line 142', x1, textDistance, Math.cos((middleAngleValue * Math.PI) / 180));
-                // if (middleAngleValue < -270 || middleAngleValue > -90) y1 -= labelHight / 1.5;
-                // if (middleAngleValue < -90 && middleAngleValue > -270) y1 += labelHight / 1.5;
-                // y1 += labelHight / 1.5;
-              }
-
-              if (overlapY) {
-                const displacementY = p.y + labelHight - y1;
-                console.log('=====', y1, p.y, p.y + labelHight, Math.abs(y1 - p.y), displacementY);
-                y1 = (textDistance + labelHight) * Math.sin((middleAngleValue * Math.PI) / 180);
-                if (middleAngleValue <= -210 && middleAngleValue >= -330) y1 -= labelHight / 2;
-                else y1 += labelHight / 2;
-                // if (middleAngleValue < -270 || middleAngleValue > -90) x1 -= labelHight / 1.5;
-                // if (Math.abs(reverseAngle[index + 1] - reverseAngle[index]) < 25) y1 += labelHight / 2;
+                return;
               }
             });
 
-            // x1 -= labelWidth / 2;
-
-            // if (Math.abs(reverseAngle[index + 1] - reverseAngle[index]) > 25) y1 += labelHight;
-
-            textPositions.push({ x: x1, y: y1 });
-            //The Y translation on the component is at the oposite direction of the cartesian plane
-            y1 *= -1;
+            //addign current label pivot point to history
+            labelPosition.push(currentPoint);
 
             return (
               <View
                 key={index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: 'auto',
-                  height: labelHight,
-                  // borderWidth: 1,
-                  transform: [{ translateX: x1 }, { translateY: y1 }],
-                }}
+                style={[
+                  styles.labelContainer,
+                  {
+                    height: labelHight,
+                    //The Y translation on the component is at the oposite direction of the cartesian plane
+                    transform: [{ translateX: currentPoint.x }, { translateY: currentPoint.y * -1 }],
+                  },
+                ]}
               >
-                <Text style={[{ fontSize: widthAndHeight / 17 }, styles.percentageText]}>
-                  {((serie / totalSerie) * 100).toFixed(1)}%
+                <Text style={[{ fontSize: widthAndHeight / 17 }, styles.labelPercentage]}>
+                  {((serie / totalSeries) * 100).toFixed(1)}%
                 </Text>
               </View>
             );
@@ -198,11 +178,17 @@ const Pie = ({
 };
 
 const styles = StyleSheet.create({
-  percentageText: {
+  labelContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 'auto',
+  },
+  labelPercentage: {
     color: 'black',
     textShadowColor: 'white',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 });
 
