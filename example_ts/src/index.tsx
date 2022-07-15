@@ -1,0 +1,66 @@
+import React from 'react';
+import { StyleProp, ViewStyle } from 'react-native';
+
+import Pie from './Pie';
+
+export type Props = {
+  widthAndHeight: number;
+  series: number[];
+  sliceColor: string[];
+  coverFill?: string;
+  coverRadius?: number;
+  doughnut?: boolean;
+  style?: StyleProp<ViewStyle>;
+  showLabels?: boolean;
+};
+
+const PieChart = ({
+  widthAndHeight,
+  series,
+  sliceColor,
+  coverFill = '#FFF',
+  coverRadius = 0.6,
+  doughnut = false,
+  style = {},
+  showLabels = true,
+}: Props): JSX.Element => {
+  const handleAngle = () => {
+    const sum = series.reduce((previous, current) => previous + current);
+
+    series.forEach((s) => {
+      if (s < 0) {
+        throw Error('Invalid series: all numbers should be positive');
+      }
+    });
+    if (sum <= 0) {
+      throw Error('Invalid series: sum of series is zero');
+    }
+
+    const angle = series.reduce(
+      (previous, current, index) => {
+        if (index == series.length - 1) {
+          return previous.concat(360);
+        }
+        return previous.concat(previous[previous.length - 1] + Math.round((360 * current) / sum));
+      },
+      [0]
+    );
+    return angle;
+  };
+
+  return (
+    <Pie
+      widthAndHeight={widthAndHeight}
+      series={series}
+      sliceColor={sliceColor}
+      coverFill={coverFill}
+      coverRadius={coverRadius}
+      doughnut={doughnut}
+      style={style}
+      angle={handleAngle()}
+      showLabels={showLabels}
+    />
+  );
+};
+
+export default PieChart;
